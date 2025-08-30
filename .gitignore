@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.log
+
+# Env & secrets
+.env
+.env.* 
+*.env
+
+# SQLite
+*.db
+*.sqlite3
+*.sqlite
+*.db-journal
+
+# Venv
+venv/
+.envrc
+
+# IDE
+.vscode/
+.idea/
+
+# Bytecode cache
+.pytest_cache/
+.mypy_cache/
