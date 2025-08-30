@@ -23,35 +23,8 @@ def _try_import(path: str):
     except Exception:
         return None
 
-def _resolve_buy_entry():
-    """
-    Пытаемся найти способ запустить мастер ПОКУПКИ.
-    Возвращает кортеж (mode, payload):
-      mode == "func"  -> payload = callable(message, state)
-      mode == "states"-> payload = StatesGroupClass (у которого есть amount_rub)
-      mode == None    -> не нашли
-    """
-    candidates = (
-        "app.handlers.admin_deals",
-        "app.handlers.admin_deals_buy",
-        "app.handlers.buy_master",
-        "app.handlers.auction_buy",
-    )
-    for modname in candidates:
-        mod = _try_import(modname)
-        if not mod:
-            continue
-        for fname in ("buy_menu", "open_buy_master", "start_buy_master"):
-            fn = getattr(mod, fname, None)
-            if callable(fn):
-                return ("func", fn)
-        for obj in vars(mod).values():
-            try:
-                if isinstance(obj, type) and issubclass(obj, StatesGroup) and hasattr(obj, "amount_rub"):
-                    return ("states", obj)
-            except Exception:
-                pass
-    return (None, None)
+# Функция _resolve_buy_entry отключена в патче №20
+# Мастер покупки/продажи временно недоступен
 
 # ---- FSM ----
 class RegStates(StatesGroup):
@@ -106,8 +79,8 @@ def admin_only(func):
 async def admin_menu(message: Message):
     b = InlineKeyboardBuilder()
     b.button(text="➕ Зарегистрировать трейдера", callback_data="admin:new_trader")
-    b.button(text="Торги → Покупка (мастер)", callback_data="admin:buy_new")
-    b.button(text="Торги → Продажа USDT (мастер)", callback_data="admin:sell")
+    # Новые торги (патч №21)
+    b.button(text="🆕 Торги (NEW)", callback_data="admin:trading_menu")
     b.button(text="💰 Управление балансом", callback_data="admin:balance_menu")
     b.button(text="Настройки → Финансы", callback_data="admin:settings_fin")
     # NEW: кнопка «Курс USDT»
@@ -128,32 +101,32 @@ async def nav_settings(cq: CallbackQuery):
     await show_finance_menu(cq.message, None)
     await cq.answer()
 
-@router.callback_query(F.data == "admin:sell")
-async def admin_open_sell(cq: CallbackQuery, state: FSMContext):
+# Новые торги (патч №21)
+@router.callback_query(F.data == "admin:trading_menu")
+async def admin_trading_menu(cq: CallbackQuery):
+    """Открытие меню новых торгов"""
     async with async_session() as s:
         u = await ensure_user(s, cq.from_user)
         if u.role != RoleEnum.admin:
             await cq.answer("Доступно только администратору.", show_alert=True)
             return
-    # Стартуем мастер ПРОДАЖИ напрямую (не вызываем message-хендлер)
-    from app.handlers.admin_deals_sell import SellStates
-    await state.clear()
-    await state.set_state(SellStates.amount_rub)
-    await cq.message.answer("1) Введите сумму сделки в RUB:")
+    
+    b = InlineKeyboardBuilder()
+    b.button(text="🔄 Создать Покупку (скелет)", callback_data="admin:trading_buy_new")
+    b.button(text="🔄 Создать Продажу (скелет)", callback_data="admin:trading_sell_new")
+    b.button(text="⬅️ Назад", callback_data="admin:menu")
+    b.adjust(1)
+    
+    await cq.message.edit_text(
+        "🆕 <b>Торги (NEW)</b>\n\n"
+        "Выберите тип операции для создания:",
+        reply_markup=b.as_markup()
+    )
     await cq.answer()
 
-@router.callback_query(F.data == "admin:buy_new")
-async def admin_open_buy_new(cq: CallbackQuery, state: FSMContext):
-    async with async_session() as s:
-        u = await ensure_user(s, cq.from_user)
-        if u.role != RoleEnum.admin:
-            await cq.answer("Доступно только администратору.", show_alert=True)
-            return
-    from app.handlers.buy_master import BuyStates
-    await state.clear()
-    await state.set_state(BuyStates.amount_rub)
-    await cq.message.answer("1) Введите сумму сделки в RUB:")
-    await cq.answer()
+# Обработчики торгов отключены в патче №20
+# @router.callback_query(F.data == "admin:sell")
+# @router.callback_query(F.data == "admin:buy_new")
 
 @router.callback_query(F.data == "admin:balance_menu")
 async def admin_open_balance_menu(cq: CallbackQuery):

@@ -44,6 +44,12 @@ def create_bot(token: str) -> Bot:
     else:
         bot = Bot(token=token, parse_mode="HTML")  # aiogram 3.0.0–3.6.x
         log.info("Bot created with parse_mode param (aiogram < 3.7).")
+    
+    # Регистрируем бота в провайдере для фоновых задач
+    from app.core.bot_provider import set_bot
+    set_bot(bot)
+    log.info("Bot registered in provider for background tasks.")
+    
     return bot
 
 
@@ -77,14 +83,9 @@ def setup_routers(dp: Dispatcher) -> None:
         "app.handlers.admin_balance",
         "app.handlers.admin_rate",
         "app.handlers.admin_settings",
-        "app.handlers.admin_deals",
-        "app.handlers.admin_deals_sell",
-        "app.handlers.buy_master",
-        "app.handlers.buy_auction",
-        "app.handlers.buy_winner",
-        "app.handlers.sell_auction",
-        "app.handlers.sell_winner",
-        "app.handlers.deal_responses",
+        # Новые торги (патч №21)
+        "app.handlers.trading_admin_buy",
+        "app.handlers.trading_admin_sell",
     ]
     for m in modules:
         include_if_exists(dp, m)

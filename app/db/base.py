@@ -39,6 +39,36 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
+async def _ensure_trades_columns(engine: AsyncEngine) -> None:
+    """Проверяет и добавляет недостающие колонки в таблицу trades"""
+    try:
+        async with engine.begin() as conn:
+            # Проверяем существование таблицы trades
+            result = await conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='trades'"))
+            if not result.scalar():
+                logger.info("Таблица trades не существует, пропускаем проверку колонок")
+                return
+            
+            # Получаем информацию о существующих колонках
+            rows = await conn.execute(text("PRAGMA table_info(trades)"))
+            cols = {row[1] for row in rows}  # row[1] — имя колонки
+            
+            stmts = []
+            if "admin_chat_id" not in cols:
+                stmts.append("ALTER TABLE trades ADD COLUMN admin_chat_id INTEGER")
+            if "admin_message_id" not in cols:
+                stmts.append("ALTER TABLE trades ADD COLUMN admin_message_id INTEGER")
+            if "countdown_until" not in cols:
+                stmts.append("ALTER TABLE trades ADD COLUMN countdown_until TEXT")
+            
+            # Выполняем ALTER TABLE для недостающих колонок
+            for sql in stmts:
+                await conn.execute(text(sql))
+                logger.info(f"Добавлена колонка в trades: {sql}")
+                
+    except Exception as e:
+        logger.warning(f"Ошибка при проверке колонок trades: {e}")
+
 async def init_db() -> None:
     """Инициализация базы данных."""
     logger.info("Инициализация базы данных...")
@@ -53,6 +83,9 @@ async def init_db() -> None:
         
         # Создаем все таблицы
         await conn.run_sync(Base.metadata.create_all)
+
+    # Проверяем и добавляем недостающие колонки в trades
+    await _ensure_trades_columns(engine)
 
     # гарантируем единственную строку настроек
     from sqlalchemy import select
